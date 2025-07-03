@@ -1,3 +1,4 @@
+"use client";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import type { Launch } from "@/api/types";
@@ -6,12 +7,14 @@ interface LaunchesCardsProps {
   launches: Launch[];
   isLoading: boolean;
   startIndex: number;
+  onRowClick: (launch: Launch) => void;
 }
 
 export function LaunchesCards({
   launches,
   isLoading,
   startIndex,
+  onRowClick,
 }: LaunchesCardsProps) {
   const getStatusBadge = (success: boolean | null, upcoming: boolean) => {
     if (upcoming) {
@@ -83,7 +86,11 @@ export function LaunchesCards({
   return (
     <div className="grid gap-4">
       {launches.map((launch, index) => (
-        <Card key={launch.id} className="hover:shadow-md transition-shadow">
+        <Card
+          key={launch.id}
+          className="hover:shadow-md transition-shadow"
+          onClick={() => onRowClick(launch)}
+        >
           <CardHeader className="pb-2">
             <div className="flex justify-between items-start">
               <div className="flex items-center gap-2">

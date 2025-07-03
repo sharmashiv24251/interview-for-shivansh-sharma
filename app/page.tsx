@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { LaunchFilters } from "@/api/types";
+import type { LaunchFilters, Launch } from "@/api/types";
 import { useLaunches } from "@/api/utils";
 import { DashboardHeader } from "@/components/dashboard-header";
 import { DashboardFilters } from "@/components/dashboard-filters";
@@ -10,11 +10,15 @@ import { LaunchesCards } from "@/components/launches-cards";
 import { DashboardPagination } from "@/components/dashboard-pagination";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { LaunchModal } from "@/components/launch-modal"; // ✅ your dumb modal component
 
 export default function LaunchesDashboard() {
   const [filters, setFilters] = useState<LaunchFilters>({});
   const [dateRange, setDateRange] = useState<{ from?: Date; to?: Date }>({});
   const [currentPage, setCurrentPage] = useState(1);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedLaunch, setSelectedLaunch] = useState<Launch | null>(null);
+
   const itemsPerPage = 12;
   const isMobile = useIsMobile();
 
@@ -40,7 +44,6 @@ export default function LaunchesDashboard() {
     setCurrentPage(1);
   };
 
-  // Pagination logic
   const totalItems = launches?.length || 0;
   const totalPages = Math.ceil(totalItems / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
@@ -49,6 +52,11 @@ export default function LaunchesDashboard() {
 
   const goToPage = (page: number) => {
     setCurrentPage(Math.max(1, Math.min(page, totalPages)));
+  };
+
+  const handleLaunchClick = (launch: Launch) => {
+    setSelectedLaunch(launch);
+    setIsModalOpen(true);
   };
 
   return (
@@ -73,12 +81,14 @@ export default function LaunchesDashboard() {
               launches={currentLaunches}
               isLoading={isLoading}
               startIndex={startIndex}
+              onRowClick={handleLaunchClick}
             />
           ) : (
             <LaunchesTable
               launches={currentLaunches}
               isLoading={isLoading}
               startIndex={startIndex}
+              onRowClick={handleLaunchClick}
             />
           )}
 
@@ -87,6 +97,14 @@ export default function LaunchesDashboard() {
               currentPage={currentPage}
               totalPages={totalPages}
               onPageChange={goToPage}
+            />
+          )}
+
+          {selectedLaunch && (
+            <LaunchModal
+              launch={selectedLaunch}
+              isOpen={isModalOpen}
+              onOpenChange={setIsModalOpen}
             />
           )}
         </div>
