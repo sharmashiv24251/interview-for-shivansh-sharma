@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import type { Launch } from "@/api/types";
+import { Loader } from "./ui/loading";
 
 interface LaunchesTableProps {
   launches: Launch[];
@@ -62,24 +63,9 @@ export function LaunchesTable({
     return "Unknown";
   };
 
-  const getRocketName = (launch: Launch) => {
-    // Most SpaceX launches use Falcon 9
-    return "Falcon 9";
-  };
-
-  const getLaunchpad = (launch: Launch) => {
-    // Map launchpad IDs to readable names
-    const launchpadMap: Record<string, string> = {
-      "5e9e4502f509094188566f88": "Kwajalein Atoll",
-      "5e9e4501f509094188566f87": "CCAFS SLC 40",
-      "5e9e4502f509094188566f89": "KSC LC 39A",
-    };
-    return launchpadMap[launch.launchpad] || "Unknown Location";
-  };
-
   return (
     <div className="bg-white rounded-lg shadow-sm border">
-      <Table>
+      <Table className="sm:min-h-[550px]">
         <TableHeader>
           <TableRow className="bg-gray-50">
             <TableHead className="font-semibold text-gray-700">No.</TableHead>
@@ -105,7 +91,7 @@ export function LaunchesTable({
           {isLoading ? (
             <TableRow>
               <TableCell colSpan={7} className="text-center py-8">
-                Loading…
+                <Loader />
               </TableCell>
             </TableRow>
           ) : launches.length === 0 ? (
@@ -133,7 +119,7 @@ export function LaunchesTable({
                   })}
                 </TableCell>
                 <TableCell>
-                  <span className="text-gray-600">{getLaunchpad(launch)}</span>
+                  <span className="text-gray-600">{launch.launchpad}</span>
                 </TableCell>
                 <TableCell className="font-medium">{launch.name}</TableCell>
                 <TableCell>
@@ -143,7 +129,7 @@ export function LaunchesTable({
                   {getStatusBadge(launch.success, launch.upcoming)}
                 </TableCell>
                 <TableCell>
-                  <span className="text-gray-600">{getRocketName(launch)}</span>
+                  <span className="text-gray-600">{launch.name}</span>
                 </TableCell>
               </TableRow>
             ))

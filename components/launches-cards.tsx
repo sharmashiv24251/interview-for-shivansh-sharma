@@ -54,15 +54,6 @@ export function LaunchesCards({
     return "Unknown";
   };
 
-  const getLaunchpad = (launch: Launch) => {
-    const launchpadMap: Record<string, string> = {
-      "5e9e4502f509094188566f88": "Kwajalein Atoll",
-      "5e9e4501f509094188566f87": "CCAFS SLC 40",
-      "5e9e4502f509094188566f89": "KSC LC 39A",
-    };
-    return launchpadMap[launch.launchpad] || "Unknown Location";
-  };
-
   if (isLoading) {
     return (
       <div className="grid gap-4">
@@ -123,7 +114,7 @@ export function LaunchesCards({
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-500">Location:</span>
-                <span>{getLaunchpad(launch)}</span>
+                <span>{launch.launchpad}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-500">Orbit:</span>
@@ -131,7 +122,7 @@ export function LaunchesCards({
               </div>
               <div className="flex justify-between">
                 <span className="text-gray-500">Rocket:</span>
-                <span>Falcon 9</span>
+                <span>{launch.name}</span>
               </div>
             </div>
           </CardContent>
