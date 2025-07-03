@@ -14,7 +14,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Calendar, ChevronLeft, ChevronRight } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 
 interface DashboardFiltersProps {
   dateRange: { from?: Date; to?: Date };
@@ -27,12 +28,25 @@ export function DashboardFilters({
   onDateRangeChange,
   onStatusFilterChange,
 }: DashboardFiltersProps) {
-  const [selectedPeriod, setSelectedPeriod] = useState("all");
-  const [currentDate, setCurrentDate] = useState(new Date());
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // Read initial state from URL
+  const urlFrom = searchParams.get("from");
+  const urlTo = searchParams.get("to");
+  const urlStatus = searchParams.get("status") || "all";
+  const urlPeriod = searchParams.get("period") || "all";
+
+  // Parse dates from URL if present
+  const initialFrom = urlFrom ? new Date(urlFrom) : undefined;
+  const initialTo = urlTo ? new Date(urlTo) : undefined;
+
+  const [selectedPeriod, setSelectedPeriod] = useState(urlPeriod);
+  const [currentDate, setCurrentDate] = useState(initialFrom || new Date());
   const [selectedRange, setSelectedRange] = useState<{
     from?: Date;
     to?: Date;
-  }>({ from: undefined, to: undefined });
+  }>({ from: initialFrom, to: initialTo });
 
   const presetPeriods = [
     "Past week",
@@ -71,6 +85,11 @@ export function DashboardFilters({
 
     const range = { from, to: now };
     setSelectedRange(range);
+    updateUrl({
+      from,
+      to: now,
+      status: searchParams.get("status") || "all",
+    });
     onDateRangeChange(range);
   };
 
@@ -84,6 +103,11 @@ export function DashboardFilters({
       const newRange = { from: clickedDate, to: undefined };
       setSelectedRange(newRange);
       setSelectedPeriod("Custom Range");
+      updateUrl({
+        from: clickedDate,
+        to: undefined,
+        status: searchParams.get("status") || "all",
+      });
       onDateRangeChange(newRange);
     } else if (selectedRange.from && !selectedRange.to) {
       // Complete the range
@@ -93,9 +117,43 @@ export function DashboardFilters({
       // Ensure from is before to
       const range = from <= to ? { from, to } : { from: to, to: from };
       setSelectedRange(range);
+      updateUrl({
+        from: range.from,
+        to: range.to,
+        status: searchParams.get("status") || "all",
+      });
       onDateRangeChange(range);
     }
   };
+  // Update URL with filter states
+  function updateUrl({
+    from,
+    to,
+    status,
+  }: {
+    from?: Date;
+    to?: Date;
+    status?: string;
+  }) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (from) {
+      params.set("from", from.toISOString().slice(0, 10));
+    } else {
+      params.delete("from");
+    }
+    if (to) {
+      params.set("to", to.toISOString().slice(0, 10));
+    } else {
+      params.delete("to");
+    }
+    // Do NOT set or delete period in the URL
+    if (status) {
+      params.set("status", status);
+    } else {
+      params.delete("status");
+    }
+    router.replace(`?${params.toString()}`);
+  }
 
   const isDateInRange = (day: number, monthOffset: number) => {
     if (!selectedRange.from) return false;
@@ -237,6 +295,28 @@ export function DashboardFilters({
     );
   };
 
+  // Sync status filter with URL
+  const handleStatusChange = (value: string) => {
+    updateUrl({
+      from: selectedRange.from,
+      to: selectedRange.to,
+      status: value,
+    });
+    onStatusFilterChange(value);
+  };
+
+  // On mount, sync state with URL and call parent callbacks
+  useEffect(() => {
+    // Only call onDateRangeChange/onStatusFilterChange if values are present in URL
+    if (initialFrom || initialTo) {
+      onDateRangeChange({ from: initialFrom, to: initialTo });
+    }
+    if (urlStatus) {
+      onStatusFilterChange(urlStatus);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <div className="flex flex-col sm:flex-row gap-4 mb-6 sm:justify-between">
       <Popover>
@@ -285,7 +365,7 @@ export function DashboardFilters({
         </PopoverContent>
       </Popover>
 
-      <Select onValueChange={onStatusFilterChange}>
+      <Select onValueChange={handleStatusChange} value={urlStatus}>
         <SelectTrigger className="w-full sm:w-[180px] bg-white">
           <SelectValue placeholder="All Launches" />
         </SelectTrigger>
