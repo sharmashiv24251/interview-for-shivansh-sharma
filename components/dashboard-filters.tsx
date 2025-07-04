@@ -1,11 +1,15 @@
 "use client";
 
+import { useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+
 import { Button } from "@/components/ui/button";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+  Dialog,
+  DialogContent,
+  DialogTrigger,
+  DialogClose,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -13,9 +17,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Calendar, ChevronLeft, ChevronRight } from "lucide-react";
-import { useState, useEffect } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+
+import { Calendar, ChevronLeft, ChevronRight, X, Filter } from "lucide-react";
 
 interface DashboardFiltersProps {
   dateRange: { from?: Date; to?: Date };
@@ -48,6 +51,8 @@ export function DashboardFilters({
     to?: Date;
   }>({ from: initialFrom, to: initialTo });
 
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+
   const presetPeriods = [
     "Past week",
     "Past month",
@@ -56,6 +61,55 @@ export function DashboardFilters({
     "Past year",
     "Past 2 years",
   ];
+
+  // Responsive: detect small screen (phone)
+  const [isSmallScreen, setIsSmallScreen] = useState(false);
+  useEffect(() => {
+    const mediaQuery = window.matchMedia("(max-width: 640px)"); // sm breakpoint in tailwind
+    setIsSmallScreen(mediaQuery.matches);
+
+    function handler(e: MediaQueryListEvent) {
+      setIsSmallScreen(e.matches);
+    }
+    mediaQuery.addEventListener("change", handler);
+    return () => mediaQuery.removeEventListener("change", handler);
+  }, []);
+
+  // Update URL with filter states
+  function updateUrl({
+    from,
+    to,
+    status,
+    period,
+  }: {
+    from?: Date;
+    to?: Date;
+    status?: string;
+    period?: string;
+  }) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (from) {
+      params.set("from", from.toISOString().slice(0, 10));
+    } else {
+      params.delete("from");
+    }
+    if (to) {
+      params.set("to", to.toISOString().slice(0, 10));
+    } else {
+      params.delete("to");
+    }
+    if (period) {
+      params.set("period", period);
+    } else {
+      params.delete("period");
+    }
+    if (status) {
+      params.set("status", status);
+    } else {
+      params.delete("status");
+    }
+    router.replace(`?${params.toString()}`);
+  }
 
   const handlePeriodSelect = (period: string) => {
     setSelectedPeriod(period);
@@ -85,12 +139,14 @@ export function DashboardFilters({
 
     const range = { from, to: now };
     setSelectedRange(range);
+    onDateRangeChange(range);
     updateUrl({
       from,
       to: now,
       status: searchParams.get("status") || "all",
+      period,
     });
-    onDateRangeChange(range);
+    setIsDialogOpen(false);
   };
 
   const handleDateClick = (day: number, monthOffset: number) => {
@@ -98,62 +154,45 @@ export function DashboardFilters({
     clickedDate.setMonth(currentDate.getMonth() + monthOffset);
     clickedDate.setDate(day);
 
+    let newRange;
     if (!selectedRange.from || (selectedRange.from && selectedRange.to)) {
       // Start new selection
-      const newRange = { from: clickedDate, to: undefined };
-      setSelectedRange(newRange);
-      setSelectedPeriod("Custom Range");
-      updateUrl({
-        from: clickedDate,
-        to: undefined,
-        status: searchParams.get("status") || "all",
-      });
-      onDateRangeChange(newRange);
+      newRange = { from: clickedDate, to: undefined };
     } else if (selectedRange.from && !selectedRange.to) {
       // Complete the range
       const from = selectedRange.from;
       const to = clickedDate;
 
       // Ensure from is before to
-      const range = from <= to ? { from, to } : { from: to, to: from };
-      setSelectedRange(range);
+      newRange = from <= to ? { from, to } : { from: to, to: from };
+      setIsDialogOpen(false); // Close dialog on range completion
+    }
+
+    if (newRange) {
+      setSelectedRange(newRange);
+      setSelectedPeriod("Custom Range");
+      onDateRangeChange(newRange);
       updateUrl({
-        from: range.from,
-        to: range.to,
+        ...newRange,
         status: searchParams.get("status") || "all",
+        period: "Custom Range",
       });
-      onDateRangeChange(range);
     }
   };
-  // Update URL with filter states
-  function updateUrl({
-    from,
-    to,
-    status,
-  }: {
-    from?: Date;
-    to?: Date;
-    status?: string;
-  }) {
-    const params = new URLSearchParams(searchParams.toString());
-    if (from) {
-      params.set("from", from.toISOString().slice(0, 10));
-    } else {
-      params.delete("from");
-    }
-    if (to) {
-      params.set("to", to.toISOString().slice(0, 10));
-    } else {
-      params.delete("to");
-    }
-    // Do NOT set or delete period in the URL
-    if (status) {
-      params.set("status", status);
-    } else {
-      params.delete("status");
-    }
-    router.replace(`?${params.toString()}`);
-  }
+
+  const handleClearDate = () => {
+    const newRange = { from: undefined, to: undefined };
+    setSelectedRange(newRange);
+    setSelectedPeriod("all");
+    onDateRangeChange(newRange);
+    updateUrl({
+      from: undefined,
+      to: undefined,
+      status: searchParams.get("status") || "all",
+      period: "all",
+    });
+    setIsDialogOpen(false);
+  };
 
   const isDateInRange = (day: number, monthOffset: number) => {
     if (!selectedRange.from) return false;
@@ -161,11 +200,18 @@ export function DashboardFilters({
     const checkDate = new Date(currentDate);
     checkDate.setMonth(currentDate.getMonth() + monthOffset);
     checkDate.setDate(day);
+    checkDate.setHours(0, 0, 0, 0);
 
     if (selectedRange.from && selectedRange.to) {
-      return checkDate >= selectedRange.from && checkDate <= selectedRange.to;
+      const from = new Date(selectedRange.from);
+      from.setHours(0, 0, 0, 0);
+      const to = new Date(selectedRange.to);
+      to.setHours(0, 0, 0, 0);
+      return checkDate >= from && checkDate <= to;
     } else if (selectedRange.from) {
-      return checkDate.getTime() === selectedRange.from.getTime();
+      const from = new Date(selectedRange.from);
+      from.setHours(0, 0, 0, 0);
+      return checkDate.getTime() === from.getTime();
     }
 
     return false;
@@ -177,8 +223,11 @@ export function DashboardFilters({
     const checkDate = new Date(currentDate);
     checkDate.setMonth(currentDate.getMonth() + monthOffset);
     checkDate.setDate(day);
+    checkDate.setHours(0, 0, 0, 0);
 
-    return checkDate.getTime() === selectedRange.from.getTime();
+    const from = new Date(selectedRange.from);
+    from.setHours(0, 0, 0, 0);
+    return checkDate.getTime() === from.getTime();
   };
 
   const isDateEnd = (day: number, monthOffset: number) => {
@@ -187,8 +236,11 @@ export function DashboardFilters({
     const checkDate = new Date(currentDate);
     checkDate.setMonth(currentDate.getMonth() + monthOffset);
     checkDate.setDate(day);
+    checkDate.setHours(0, 0, 0, 0);
 
-    return checkDate.getTime() === selectedRange.to.getTime();
+    const to = new Date(selectedRange.to);
+    to.setHours(0, 0, 0, 0);
+    return checkDate.getTime() === to.getTime();
   };
 
   const monthNames = [
@@ -228,12 +280,12 @@ export function DashboardFilters({
     const firstDayOfMonth = getFirstDayOfMonth(displayDate);
     const days = [];
 
-    // Add empty cells for days before the first day of the month
     for (let i = 0; i < firstDayOfMonth; i++) {
-      days.push(<div key={`empty-${i}`} className="w-8 h-8"></div>);
+      days.push(
+        <div key={`empty-${monthOffset}-${i}`} className="w-8 h-8"></div>
+      );
     }
 
-    // Add days of the month
     for (let day = 1; day <= daysInMonth; day++) {
       const inRange = isDateInRange(day, monthOffset);
       const isStart = isDateStart(day, monthOffset);
@@ -241,15 +293,20 @@ export function DashboardFilters({
 
       days.push(
         <button
-          key={day}
+          key={`${monthOffset}-${day}`}
           onClick={() => handleDateClick(day, monthOffset)}
-          className={`w-8 h-8 text-sm rounded flex items-center justify-center transition-colors ${
+          className={`w-8 h-8 text-sm rounded flex items-center justify-center transition-all duration-200 ease-out transform hover:scale-105 ${
             inRange
               ? isStart || isEnd
-                ? "bg-blue-600 text-white"
+                ? "bg-blue-600 text-white scale-110"
                 : "bg-blue-100 text-blue-900"
               : "hover:bg-gray-100"
           }`}
+          type="button"
+          aria-pressed={inRange}
+          aria-label={`Select ${
+            monthNames[displayDate.getMonth()]
+          } ${day}, ${displayDate.getFullYear()}`}
         >
           {day}
         </button>
@@ -257,10 +314,15 @@ export function DashboardFilters({
     }
 
     return (
-      <div className="p-4">
+      <div className="p-4 min-w-[280px]">
         <div className="flex items-center justify-between mb-4">
           {monthOffset === 0 && (
-            <button onClick={() => navigateMonth(-1)}>
+            <button
+              onClick={() => navigateMonth(-1)}
+              aria-label="Previous month"
+              type="button"
+              className="p-1 rounded-full hover:bg-gray-200 transition-transform hover:scale-110"
+            >
               <ChevronLeft className="h-4 w-4" />
             </button>
           )}
@@ -272,8 +334,13 @@ export function DashboardFilters({
               {displayDate.getFullYear()}
             </span>
           </div>
-          {monthOffset === 1 && (
-            <button onClick={() => navigateMonth(1)}>
+          {monthOffset === (isSmallScreen ? 0 : 1) && (
+            <button
+              onClick={() => navigateMonth(1)}
+              aria-label="Next month"
+              type="button"
+              className="p-1 rounded-full hover:bg-gray-200 transition-transform hover:scale-110"
+            >
               <ChevronRight className="h-4 w-4" />
             </button>
           )}
@@ -282,8 +349,8 @@ export function DashboardFilters({
         <div className="grid grid-cols-7 gap-1 mb-2">
           {["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"].map((day) => (
             <div
-              key={day}
-              className="w-8 h-8 text-xs text-gray-500 flex items-center justify-center font-medium"
+              key={`${monthOffset}-header-${day}`}
+              className="w-8 h-8 text-xs text-gray-500 flex items-center justify-center font-medium select-none"
             >
               {day}
             </div>
@@ -295,19 +362,17 @@ export function DashboardFilters({
     );
   };
 
-  // Sync status filter with URL
   const handleStatusChange = (value: string) => {
+    onStatusFilterChange(value);
     updateUrl({
       from: selectedRange.from,
       to: selectedRange.to,
       status: value,
+      period: selectedPeriod,
     });
-    onStatusFilterChange(value);
   };
 
-  // On mount, sync state with URL and call parent callbacks
   useEffect(() => {
-    // Only call onDateRangeChange/onStatusFilterChange if values are present in URL
     if (initialFrom || initialTo) {
       onDateRangeChange({ from: initialFrom, to: initialTo });
     }
@@ -317,57 +382,79 @@ export function DashboardFilters({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const formatPeriodLabel = () => {
+    if (
+      selectedPeriod === "Custom Range" &&
+      selectedRange.from &&
+      selectedRange.to
+    ) {
+      return `${selectedRange.from.toLocaleDateString()} - ${selectedRange.to.toLocaleDateString()}`;
+    } else if (selectedPeriod === "Custom Range" && selectedRange.from) {
+      return `${selectedRange.from.toLocaleDateString()} - ...`;
+    }
+    return selectedPeriod === "all" ? "Select Date" : selectedPeriod;
+  };
+
   return (
     <div className="flex flex-col sm:flex-row gap-4 mb-6 sm:justify-between">
-      <Popover>
-        <PopoverTrigger asChild>
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogTrigger asChild>
           <Button
-            variant="outline"
-            className="w-full sm:w-[200px] justify-start text-left font-normal bg-white"
+            variant="ghost"
+            className="w-full sm:w-auto justify-start text-left font-normal hover:bg-transparent"
+            aria-label="Open calendar filter"
+            type="button"
           >
             <Calendar className="mr-2 h-4 w-4" />
-            {selectedPeriod === "Custom Range" &&
-            selectedRange.from &&
-            selectedRange.to
-              ? `${selectedRange.from.toLocaleDateString()} - ${selectedRange.to.toLocaleDateString()}`
-              : selectedPeriod === "Custom Range" && selectedRange.from
-              ? `${selectedRange.from.toLocaleDateString()} - ...`
-              : selectedPeriod}
+            {formatPeriodLabel()}
           </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-auto p-0" align="start">
-          <div className="flex">
-            {/* Left sidebar with preset periods */}
-            <div className="bg-gray-50 p-4 border-r">
+        </DialogTrigger>
+        <DialogContent className="p-0 overflow-hidden sm:min-w-[700px]">
+          <div className="flex border-b items-center justify-between p-4">
+            <h3 className="text-lg font-medium">Select Date Range</h3>
+          </div>
+          <div className="flex flex-col sm:flex-row">
+            <div className="bg-gray-50 p-4 border-r min-w-[140px]">
               <div className="space-y-1">
                 {presetPeriods.map((period) => (
                   <button
                     key={period}
                     onClick={() => handlePeriodSelect(period)}
-                    className={`block w-full text-left text-sm px-3 py-2 rounded hover:bg-gray-100 ${
+                    className={`block w-full text-left text-sm px-3 py-2 rounded transition-colors duration-200 ${
                       selectedPeriod === period
                         ? "bg-blue-100 text-blue-700"
-                        : "text-gray-700"
+                        : "text-gray-700 hover:bg-gray-100"
                     }`}
+                    type="button"
                   >
                     {period}
                   </button>
                 ))}
+                <button
+                  key="clear"
+                  onClick={handleClearDate}
+                  className="block w-full text-left text-sm px-3 py-2 rounded text-red-600 hover:bg-red-50 transition-colors duration-200"
+                  type="button"
+                >
+                  Clear
+                </button>
               </div>
             </div>
 
-            {/* Calendar months */}
-            <div className="flex">
+            <div className="flex overflow-x-auto mx-auto">
               {renderCalendar(0)}
-              {renderCalendar(1)}
+              {!isSmallScreen && renderCalendar(1)}
             </div>
           </div>
-        </PopoverContent>
-      </Popover>
+        </DialogContent>
+      </Dialog>
 
       <Select onValueChange={handleStatusChange} value={urlStatus}>
-        <SelectTrigger className="w-full sm:w-[180px] bg-white">
-          <SelectValue placeholder="All Launches" />
+        <SelectTrigger className="w-full sm:w-auto bg-transparent border-0 shadow-none hover:bg-transparent focus:ring-0 focus:ring-offset-0 p-2">
+          <div className="flex items-center">
+            <Filter className="mr-2 h-4 w-4" />
+            <SelectValue placeholder="All Launches" />
+          </div>
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="all">All Launches</SelectItem>
