@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import type { LaunchFilters, Launch } from "@/api/types";
 import { useLaunches } from "@/api/utils";
 import { DashboardHeader } from "@/components/dashboard-header";
@@ -10,7 +10,7 @@ import { LaunchesCards } from "@/components/launches-cards";
 import { DashboardPagination } from "@/components/dashboard-pagination";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { LaunchModal } from "@/components/launch-modal"; // ✅ your dumb modal component
+import { LaunchModal } from "@/components/launch-modal";
 
 export default function LaunchesDashboard() {
   const [filters, setFilters] = useState<LaunchFilters>({});
@@ -61,54 +61,56 @@ export default function LaunchesDashboard() {
 
   return (
     <ErrorBoundary>
-      <div className="min-h-screen bg-gray-50">
-        <div className="max-w-7xl mx-auto p-4 md:p-6">
-          <DashboardHeader />
+      <Suspense fallback={<div className="p-8 text-center">Loading...</div>}>
+        <div className="min-h-screen bg-gray-50">
+          <div className="max-w-7xl mx-auto p-4 md:p-6">
+            <DashboardHeader />
 
-          <DashboardFilters
-            dateRange={dateRange}
-            onDateRangeChange={handleDateRangeChange}
-            onStatusFilterChange={handleStatusFilterChange}
-          />
+            <DashboardFilters
+              dateRange={dateRange}
+              onDateRangeChange={handleDateRangeChange}
+              onStatusFilterChange={handleStatusFilterChange}
+            />
 
-          {error ? (
-            <div className="bg-white rounded-lg shadow-sm border p-8 text-center">
-              <div className="text-red-600 mb-2">Error loading launches</div>
-              <div className="text-gray-500 text-sm">{error.message}</div>
-            </div>
-          ) : isMobile ? (
-            <LaunchesCards
-              launches={currentLaunches}
-              isLoading={isLoading}
-              startIndex={startIndex}
-              onRowClick={handleLaunchClick}
-            />
-          ) : (
-            <LaunchesTable
-              launches={currentLaunches}
-              isLoading={isLoading}
-              startIndex={startIndex}
-              onRowClick={handleLaunchClick}
-            />
-          )}
+            {error ? (
+              <div className="bg-white rounded-lg shadow-sm border p-8 text-center">
+                <div className="text-red-600 mb-2">Error loading launches</div>
+                <div className="text-gray-500 text-sm">{error.message}</div>
+              </div>
+            ) : isMobile ? (
+              <LaunchesCards
+                launches={currentLaunches}
+                isLoading={isLoading}
+                startIndex={startIndex}
+                onRowClick={handleLaunchClick}
+              />
+            ) : (
+              <LaunchesTable
+                launches={currentLaunches}
+                isLoading={isLoading}
+                startIndex={startIndex}
+                onRowClick={handleLaunchClick}
+              />
+            )}
 
-          {totalPages > 1 && !error && (
-            <DashboardPagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              onPageChange={goToPage}
-            />
-          )}
+            {totalPages > 1 && !error && (
+              <DashboardPagination
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={goToPage}
+              />
+            )}
 
-          {selectedLaunch && (
-            <LaunchModal
-              launch={selectedLaunch}
-              isOpen={isModalOpen}
-              onOpenChange={setIsModalOpen}
-            />
-          )}
+            {selectedLaunch && (
+              <LaunchModal
+                launch={selectedLaunch}
+                isOpen={isModalOpen}
+                onOpenChange={setIsModalOpen}
+              />
+            )}
+          </div>
         </div>
-      </div>
+      </Suspense>
     </ErrorBoundary>
   );
 }
